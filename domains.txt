@@ -1,0 +1,14 @@
+{
+  "a.nl": {
+    "target": "http://86.93.13.243:8500/",
+    "rate_limit": 50
+  },
+  "a2.nl": {
+    "target": "http://86.93.13.243:8500/",
+    "rate_limit": 50
+  },
+    "localhost": {
+    "target": "http://google.com/",
+    "rate_limit": 50
+  }
+}

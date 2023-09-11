@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Datacenter Proxy</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <div id="authenticationForm">
+      <label for="key">Key:</label>
+      <input type="password" id="key" required>
+      <button type="button" onclick="authenticate()">Authenticate</button>
+      <p id="authStatus"></p>
+    </div>
+  </div>
+
+  <div class="sidebar" style="display: none;">
+    <a class="nav_analytics">Analytics</a>
+    <a class="nav_dns">DNS</a>
+    <a class="nav_security">Security</a>
+  </div>
+
+  <div class="analytics" style="display: none;">
+    <div class="box">
+      Total requests: <span id="requests">0</span>
+    </div>
+    <div class="box">
+      Total blocked requests: <span id="blocked_requests">0</span>
+    </div>
+
+
+
+    <div class="chart-container">
+      <canvas id="real-time-chart"></canvas>
+    </div>
+  
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  </div>
+
+
+  <div class="dns" style="display: none;">
+    <div class="container">
+      <h1>Datacenter DNS</h1>
+      <div id="panel" style="display: none;">
+        <h2>Current Domains</h2>
+        <ul id="domainList"></ul>
+        <button type="button" onclick="toggleAddDomainForm()">Add Domain</button>
+        <button type="button" onclick="toggleEditDomainForm()">Edit Domain</button>
+        <button type="button" onclick="toggleDeleteDomainForm()">Delete Domain</button>
+
+        <form id="addDomainForm" style="display: none;">
+          <label for="host">Host:</label>
+          <input type="text" id="host" name="host" required>
+          <br>
+          <label for="target">Target:</label>
+          <input type="text" id="target" name="target" required>
+          <br>
+          <label for="rate_limit">Rate Limit:</label>
+          <input type="number" id="rate_limit" name="rate_limit" required>
+          <br>
+          <button type="button" class="buttonx" onclick="addDomain()">Submit</button>
+        </form>
+
+        <form id="editDomainForm" style="display: none;">
+          <label for="editHost">Host:</label>
+          <select id="editHost" name="host"></select>
+          <br>
+          <label for="editTarget">Target:</label>
+          <input type="text" id="editTarget" name="target" required>
+          <br>
+          <label for="editRateLimit">Rate Limit:</label>
+          <input type="number" id="editRateLimit" name="rate_limit" required>
+          <br>
+          <button type="button" class="buttonx" onclick="editDomain()">Submit</button>
+        </form>
+        <form id="deleteDomainForm" style="display: none;">
+          <label for="deleteHost">Select Domain to Delete:</label>
+          <select id="deleteHost"></select>
+          <button type="button" class="buttonx" onclick="deleteDomain()">Submit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="security" style="display: none;">
+    <center>Security Soon!</center>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let authenticated = false;
+
+    document.getElementsByClassName('nav_analytics')[0].onclick = function () {
+      document.getElementsByClassName('analytics')[0].style.display = 'block';
+      document.getElementsByClassName('dns')[0].style.display = 'none';
+      document.getElementsByClassName('security')[0].style.display = 'none';
+      const analyticsContainer = document.querySelector('.analytics');
+      analyticsContainer.style.backgroundColor = '#1a1a1a';
+      analyticsContainer.style.display = 'flex';
+      analyticsContainer.style.flexDirection = 'column';
+      analyticsContainer.style.alignItems = 'center';
+      analyticsContainer.style.justifyContent = 'center';
+      analyticsContainer.style.height = '100vh';
+    }
+
+    document.getElementsByClassName('nav_dns')[0].onclick = function () {
+      document.getElementsByClassName('analytics')[0].style.display = 'none';
+      document.getElementsByClassName('dns')[0].style.display = 'block';
+      document.getElementsByClassName('security')[0].style.display = 'none';
+    }
+
+    document.getElementsByClassName('nav_security')[0].onclick = function () {
+      document.getElementsByClassName('analytics')[0].style.display = 'none';
+      document.getElementsByClassName('dns')[0].style.display = 'none';
+      document.getElementsByClassName('security')[0].style.display = 'block';
+    }
+
+    const authenticate = () => {
+      const key = document.getElementById('key').value;
+      socket.emit('authenticate', key);
+    };
+
+    setInterval(() => {
+      socket.emit('analytics');
+    }, 1000)
+
+let first_ping = false;
+let previousRequests = 0;
+
+socket.on('x', (req, block) => {
+  if (first_ping == false) {
+    first_ping = true;
+    previousRequests = req;
+    return;
+  } else {
+    const requestsDifference = req - previousRequests;
+    previousRequests = req;
+
+    chart.data.datasets[0].data.shift();
+    chart.data.datasets[0].data.push(requestsDifference);
+    chart.update();
+  }
+
+  document.getElementById('requests').innerHTML = req;
+  document.getElementById('blocked_requests').innerHTML = block;
+});
+
+    socket.on('authResult', (result) => {
+      if (result === 'success') {
+        authenticated = true;
+        document.getElementsByClassName('container')[0].style.display = 'none';
+        document.getElementById('panel').style.display = 'block';
+        document.getElementsByClassName('sidebar')[0].style.display = 'block';
+        document.getElementsByClassName('analytics')[0].style.display = 'block';
+
+        const analyticsContainer = document.querySelector('.analytics');
+        analyticsContainer.style.backgroundColor = '#1a1a1a';
+        analyticsContainer.style.display = 'flex';
+        analyticsContainer.style.flexDirection = 'column';
+        analyticsContainer.style.alignItems = 'center';
+        analyticsContainer.style.justifyContent = 'center';
+        analyticsContainer.style.height = '100vh';
+
+        socket.emit('initialAuthentication');
+      } else {
+        document.getElementById('authStatus').textContent = 'Authentication failed.';
+      }
+    });
+
+    socket.on('disconnect', () => {
+      authenticated = false;
+      document.getElementById('authenticationForm').style.display = 'block';
+      document.getElementById('panel').style.display = 'none';
+    });
+
+    socket.on('initialDomains', (domains) => {
+      updateDomainList(domains);
+    });
+
+    socket.on('domainAdded', (domain) => {
+      updateDomainList(domain);
+    });
+
+    socket.on('domainUpdated', (domain) => {
+      updateDomainList(domain);
+    });
+
+    socket.on('domainDeleted', (host) => {
+      deleteDomainFromList(host);
+    });
+
+    const updateDomainList = (domains) => {
+      const domainList = document.getElementById('domainList');
+      domainList.innerHTML = '';
+
+      const editHostSelect = document.getElementById('editHost');
+      editHostSelect.innerHTML = '';
+
+      const deleteHostSelect = document.getElementById('deleteHost');
+      deleteHostSelect.innerHTML = '';
+
+      for (const host in domains) {
+        const listItem = document.createElement('li');
+        listItem.textContent = `${host} - Target: ${domains[host].target}, Rate Limit: ${domains[host].rate_limit}`;
+        domainList.appendChild(listItem);
+
+        const option = document.createElement('option');
+        option.value = host;
+        option.textContent = host;
+        editHostSelect.appendChild(option);
+
+        const deleteOption = document.createElement('option');
+        deleteOption.value = host;
+        deleteOption.textContent = host;
+        deleteHostSelect.appendChild(deleteOption);
+      }
+    };
+
+    const addDomain = () => {
+      if (!authenticated) return;
+      const host = document.getElementById('host').value;
+      const target = document.getElementById('target').value;
+      const rate_limit = document.getElementById('rate_limit').value;
+
+      if (host && target && rate_limit) {
+        socket.emit('addDomain', { host, target, rate_limit });
+      }
+    };
+
+    const editDomain = () => {
+      if (!authenticated) return;
+      const host = document.getElementById('editHost').value;
+      const target = document.getElementById('editTarget').value;
+      const rate_limit = document.getElementById('editRateLimit').value;
+
+      if (host && target && rate_limit) {
+        socket.emit('editDomain', { host, target, rate_limit });
+      }
+    };
+
+    const deleteDomain = () => {
+      if (!authenticated) return;
+      const host = document.getElementById('deleteHost').value;
+      if (host) {
+        socket.emit('deleteDomain', host);
+      }
+    };
+
+    const deleteDomainFromList = (host) => {
+      const domainList = document.getElementById('domainList');
+      const deleteHostSelect = document.getElementById('deleteHost');
+      const index = [...domainList.children].findIndex((li) => li.textContent.includes(host));
+      if (index !== -1) {
+        domainList.removeChild(domainList.children[index]);
+        deleteHostSelect.removeChild(deleteHostSelect.children[index]);
+      }
+    };
+
+    const toggleAddDomainForm = () => {
+      const addDomainForm = document.getElementById('addDomainForm');
+      const editDomainForm = document.getElementById('editDomainForm');
+      const deleteDomainForm = document.getElementById('deleteDomainForm');
+      addDomainForm.style.display = addDomainForm.style.display === 'none' ? 'block' : 'none';
+      editDomainForm.style.display = 'none';
+      deleteDomainForm.style.display = 'none';
+    };
+
+    const toggleEditDomainForm = () => {
+      const addDomainForm = document.getElementById('addDomainForm');
+      const editDomainForm = document.getElementById('editDomainForm');
+      const deleteDomainForm = document.getElementById('deleteDomainForm');
+
+      addDomainForm.style.display = 'none';
+      editDomainForm.style.display = editDomainForm.style.display === 'none' ? 'block' : 'none';
+      deleteDomainForm.style.display = 'none';
+    };
+
+    const toggleDeleteDomainForm = () => {
+      const addDomainForm = document.getElementById('addDomainForm');
+      const editDomainForm = document.getElementById('editDomainForm');
+      const deleteDomainForm = document.getElementById('deleteDomainForm');
+      addDomainForm.style.display = 'none';
+      editDomainForm.style.display = 'none';
+      deleteDomainForm.style.display = deleteDomainForm.style.display === 'none' ? 'block' : 'none';
+    };
+
+const ctx = document.getElementById('real-time-chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: Array.from({ length: 60 }, (_, i) => (60 - i).toString()),
+    datasets: [{
+      label: 'Current Load',
+      borderColor: 'rgba(75, 192, 192, 1)',
+      backgroundColor: 'rgba(75, 192, 192, 0.2)',
+      data: Array.from({ length: 60 }, () => 0),
+      borderWidth: 1,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: 'Time (seconds ago)',
+        },
+      },
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'HTTP',
+        },
+      }
+    }
+  }
+});
+
+
+  </script>
+</body>
+
+</html>
